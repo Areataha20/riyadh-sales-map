@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خطة زيارات أحياء الرياض - أنظمة السلامة</title>
+    <style>
+        :root {
+            --primary: #0284c7;
+            --success: #16a34a;
+            --success-bg: #f0fdf4;
+            --success-border: #bbf7d0;
+            --warning: #ca8a04;
+            --warning-bg: #fefce8;
+            --warning-border: #fef08a;
+            --bg: #f8fafc;
+            --text: #1e293b;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; padding: 15px; color: var(--text); }
+        .container { max-width: 700px; margin: auto; background: #fff; padding: 20px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #0f172a; margin-bottom: 5px; font-size: 20px; }
+        p.subtitle { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 20px; }
+        
+        /* إحصائيات */
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
+        .stat-box { background: #f1f5f9; padding: 10px 5px; text-align: center; border-radius: 8px; font-size: 12px; font-weight: bold; border: 1px solid #e2e8f0; }
+        .stat-box.v { background: var(--success-bg); color: var(--success); border-color: var(--success-border); }
+        .stat-box.p { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
+
+        /* شريط البحث والفلترة */
+        .controls { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+        input, select { flex: 1; min-width: 150px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; outline: none; }
+        input:focus, select:focus { border-color: var(--primary); }
+
+        /* بطاقات الأحياء */
+        .list { display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; padding-left: 5px; }
+        .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; transition: all 0.2s; position: relative; }
+        .card.visited { background: var(--success-bg); border-color: var(--success-border); opacity: 0.85; }
+        .card.postponed { background: var(--warning-bg); border-color: var(--warning-border); }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+        .district-name { font-weight: bold; font-size: 15px; color: #0f172a; }
+        .region-tag { font-size: 11px; background: #e2e8f0; padding: 2px 8px; border-radius: 20px; color: #475569; }
+        
+        .streets { font-size: 12px; color: #475569; margin-bottom: 6px; }
+        .notes { font-size: 12px; color: #334155; background: rgba(0,0,0,0.03); padding: 4px 8px; border-radius: 6px; margin-bottom: 10px; }
+
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        button, .map-btn { flex: 1; min-width: 90px; padding: 7px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: #fff; text-align: center; text-decoration: none; transition: opacity 0.2s; display: inline-block; }
+        button:active, .map-btn:active { opacity: 0.7; }
+        .btn-visit { background: #22c55e; }
+        .btn-postpone { background: #eab308; }
+        .btn-map { background: #0284c7; }
+        .btn-reset { background: #94a3b8; max-width: 50px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🗺️ خريطة زيارات أحياء الرياض</h2>
+    <p class="subtitle">تتبع خط سير مندوب مبيعات أنظمة السلامة والمقاولات مع التوجيه المباشر</p>
+
+    <div class="stats">
+        <div class="stat-box">الإجمالي: <span id="total">0</span></div>
+        <div class="stat-box v">تم الزيارة: <span id="visited">0</span></div>
+        <div class="stat-box p">مؤجل: <span id="postponed">0</span></div>
+        <div class="stat-box">متبقي: <span id="pending">0</span></div>
+    </div>
+
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="ابحث عن حي أو شارع..." onkeyup="filterData()">
+        <select id="statusFilter" onchange="filterData()">
+            <option value="all">جميع الحالات</option>
+            <option value="pending">قيد الانتظار</option>
+            <option value="visited">تم الزيارة</option>
+            <option value="postponed">مؤجل</option>
+        </select>
+        <select id="regionFilter" onchange="filterData()">
+            <option value="all">كل المناطق</option>
+            <option value="شمال الرياض">شمال الرياض</option>
+            <option value="شرق الرياض">شرق الرياض</option>
+            <option value="وسط الرياض">وسط الرياض</option>
+            <option value="غرب الرياض">غرب الرياض</option>
+            <option value="جنوب الرياض">جنوب الرياض</option>
+        </select>
+    </div>
+
+    <div class="list" id="districtList"></div>
+</div>
+
+<script>
+    const districts = [
+        { id: 1, region: "شمال الرياض", name: "حي الياسمين", streets: "طريق الملك عبدالعزيز، التخصصي، أبوبكر الصديق، أنس بن مالك", notes: "مجمع شركات مقاولات وانظمة حريق", status: "pending" },
+        { id: 2, region: "شمال الرياض", name: "حي النرجس", streets: "طريق الملك سلمان، عثمان بن عفان، الإمام سعود بن فيصل", notes: "مباني تحت التشطيب ومجمعات جديدة", status: "pending" },
+        { id: 3, region: "شمال الرياض", name: "حي الصحافة", streets: "طريق الملك فهد، العليا، الإمام سعود بن عبد العزيز", notes: "أبراج ومكاتب هندسية", status: "pending" },
+        { id: 4, region: "شمال الرياض", name: "حي العقيق", streets: "طريق الملك فهد، الأمير محمد بن سلمان، التخصصي", notes: "شركات كبرى ومعارض", status: "pending" },
+        { id: 5, region: "شمال الرياض", name: "حي الملقا", streets: "طريق الملك فهد، أنس بن مالك، الأمير محمد بن سلمان", notes: "مشاريع تجارية وسكنية قيد التنفيذ", status: "pending" },
+        { id: 6, region: "شمال الرياض", name: "حي التعاون", streets: "طريق الملك عبدالله، عثمان بن عفان، خالد بن الوليد", notes: "محلات وموردين انظمة سلامة", status: "pending" },
+        { id: 7, region: "شمال الرياض", name: "حي النزهة", streets: "طريق الملك عبد الله، أبي بكر الصديق", notes: "منطقة تجارية نشطة", status: "pending" },
+        { id: 8, region: "شمال الرياض", name: "حي المصيف", streets: "طريق الإمام سعود بن عبد العزيز، عثمان بن عفان", notes: "منطقة خدمية وتجارية", status: "pending" },
+        { id: 9, region: "شرق الرياض", name: "حي النسيم الغربي", streets: "طريق خريص، حسان بن ثابت، الأربعين", notes: "مستودعات ومحلات تجارية لأنظمة السلامة", status: "pending" },
+        { id: 10, region: "شرق الرياض", name: "حي النسيم الشرقي", streets: "طريق خريص، الأندلس، عبدالرحمن بن عوف", notes: "مستودعات وقطع غيار", status: "pending" },
+        { id: 11, region: "شرق الرياض", name: "حي السلي", streets: "طريق الحراج، الشارع التجاري بالسلي، الدائري الجنوبي", notes: "منطقة المستودعات الكبرى ومصانع ومقاولات", status: "pending" },
+        { id: 12, region: "شرق الرياض", name: "حي الروضة", streets: "طريق خريص، الحسن بن علي، حفصة بنت عمر", notes: "محلات تجارية وورش ومكاتب", status: "pending" },
+        { id: 13, region: "شرق الرياض", name: "حي الملك فهد", streets: "طريق الملك عبد العزيز، العليا، الإمام سعود", notes: "منطقة حيوية ومؤسسات", status: "pending" },
+        { id: 14, region: "شرق الرياض", name: "حي القدس", streets: "طريق الملك عبدالله، الدائري الشرقي، خالد بن الوليد", notes: "مراكز تجارية وشركات", status: "pending" },
+        { id: 15, region: "شرق الرياض", name: "حي الحمراء", streets: "طريق الملك عبد الله، الحسن بن علي", notes: "مجمعات ومحلات تجارية", status: "pending" },
+        { id: 16, region: "وسط الرياض", name: "حي الملز", streets: "شارع الستين، جرير، المطار القديم، الأحساء", notes: "مكاتب هندسية ومقاولات قديمة ونشطة", status: "pending" },
+        { id: 17, region: "وسط الرياض", name: "حي المربع", streets: "طريق الملك فهد، الملك فيصل، الوشام", notes: "مباني حكومية وشركات تجارية", status: "pending" },
+        { id: 18, region: "وسط الرياض", name: "حي البطحاء", streets: "شارع الالدود، طارق بن زياد، الملك فهد", notes: "أسواق ومحلات تجارية ومعدات أمن والسلامة", status: "pending" },
+        { id: 19, region: "وسط الرياض", name: "حي الديرة", streets: "الإمام تركي بن عبدالله، الملك فهد", notes: "منطقة تجارية مركزية", status: "pending" },
+        { id: 20, region: "وسط الرياض", name: "حي الفاخرية", streets: "طريق الملك فهد، المعذر", notes: "منطقة مكاتب وشركات", status: "pending" },
+        { id: 21, region: "غرب الرياض", name: "حي السفارات", streets: "الأمير تركي بن عبدالعزيز الأول، ابن سينا", notes: "سفارات ومنشآت كبرى ومقاولين معتمدين", status: "pending" },
+        { id: 22, region: "غرب الرياض", name: "حي البديعة", streets: "شارع المدينة المنورة، حمزة بن عبدالمطلب، العرض", notes: "منطقة تجارية كبرى ومحلات تمديدات", status: "pending" },
+        { id: 23, region: "غرب الرياض", name: "حي ظهرة البديعة", streets: "طريق مكة المكرمة، شارع المدينة المنورة", notes: "محلات تجارية ومقاولات فرعية", status: "pending" },
+        { id: 24, region: "غرب الرياض", name: "حي لبن (الواحة)", streets: "طريق ديراب، عائشة بنت أبي بكر، الطائف", notes: "مجمعات سكنية وتجارية جديدة", status: "pending" },
+        { id: 25, region: "غرب الرياض", name: "حي شبرا", streets: "طريق الدائري الغربي، الترمذي", notes: "محلات تجارية ومؤسسات", status: "pending" },
+        { id: 26, region: "جنوب الرياض", name: "حي الشفا", streets: "الإمام مسلم، شارع المائة، الدائري الجنوبي", notes: "ورش ومستودعات ومحلات أنظمة حريق", status: "pending" },
+        { id: 27, region: "جنوب الرياض", name: "حي الدار البيضاء", streets: "طريق الحائر، الخليل بن أحمد", notes: "منطقة مستودعات ومعارض ومصانع", status: "pending" },
+        { id: 28, region: "جنوب الرياض", name: "حي العزيزية", streets: "شارع الشباب، الإمام مسلم، طريق الحائر", notes: "محلات تجارية ومؤسسات مقاولات", status: "pending" },
+        { id: 29, region: "جنوب الرياض", name: "حي المصانع", streets: "طريق الخرج، شارع الصناعية القديمة", notes: "مصانع وورش ومعدات ثقيلة", status: "pending" },
+        { id: 30, region: "جنوب الرياض", name: "الصناعية القديمة", streets: "شارع الفرزدق، الأخشاب، العلياء", notes: "أكبر تجمع لمعدات السلامة وقطع الغيار وشركات الصيانة", status: "pending" }
+    ];
+
+    function render() {
+        const listContainer = document.getElementById("districtList");
+        const searchQuery = document.getElementById("searchInput").value.toLowerCase();
+        const statusFilter = document.getElementById("statusFilter").value;
+        const regionFilter = document.getElementById("regionFilter").value;
+
+        listContainer.innerHTML = "";
+
+        let visitedCount = 0;
+        let postponedCount = 0;
+        let pendingCount = 0;
+
+        districts.forEach(d => {
+            if (d.status === 'visited') visitedCount++;
+            else if (d.status === 'postponed') postponedCount++;
+            else pendingCount++;
+
+            const matchesSearch = d.name.toLowerCase().includes(searchQuery) || d.streets.toLowerCase().includes(searchQuery) || d.notes.toLowerCase().includes(searchQuery);
+            const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
+            const matchesRegion = regionFilter === 'all' || d.region === regionFilter;
+
+            if (!matchesSearch || !matchesStatus || !matchesRegion) return;
+
+            let cardClass = "card";
+            if (d.status === 'visited') cardClass += " visited";
+            if (d.status === 'postponed') cardClass += " postponed";
+
+            // رابط خرائط جوجل المباشر للحي والشوارع
+            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.name + " " + d.streets + " الرياض")}`;
+
+            listContainer.innerHTML += `
+                <div class="${cardClass}">
+                    <div class="card-header">
+                        <span class="district-name">${d.name}</span>
+                        <span class="region-tag">${d.region}</span>
+                    </div>
+                    <div class="streets">🛣️ الشوارع: ${d.streets}</div>
+                    <div class="notes">💡 ${d.notes}</div>
+                    <div class="actions">
+                        <a href="${mapUrl}" target="_blank" class="map-btn btn-map">🧭 الخريطة</a>
+                        <button class="btn-visit" onclick="setStatus(${d.id}, 'visited')">✅ تم</button>
+                        <button class="btn-postpone" onclick="setStatus(${d.id}, 'postponed')">⏳ مؤجل</button>
+                        <button class="btn-reset" onclick="setStatus(${d.id}, 'pending')">إعادة</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        document.getElementById("total").innerText = districts.length;
+        document.getElementById("visited").innerText = visitedCount;
+        document.getElementById("postponed").innerText = postponedCount;
+        document.getElementById("pending").innerText = pendingCount;
+    }
+
+    function setStatus(id, status) {
+        const item = districts.find(d => d.id === id);
+        if (item) {
+            item.status = status;
+            render();
+        }
+    }
+
+    function filterData() {
+        render();
+    }
+
+    render();
+</script>
+
+</body>
+</html>
